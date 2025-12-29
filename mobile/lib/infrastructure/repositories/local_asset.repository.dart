@@ -126,4 +126,21 @@ class DriftLocalAssetRepository extends DriftDatabaseRepository {
     }
     return result;
   }
+
+  /// Returns local assets that are backed up on the server (have a matching checksum
+  /// in remote_asset_entity for the given user) and were created before the cutoff date.
+  /// Only returns assets that are not in the server's trash (deletedAt is null).
+  Future<List<LocalAsset>> getRemovalCandidates(String userId, DateTime cutoffDate) async {
+    final query = _db.localAssetEntity.select().join([
+      innerJoin(
+        _db.remoteAssetEntity,
+        _db.localAssetEntity.checksum.equalsExp(_db.remoteAssetEntity.checksum) &
+            _db.remoteAssetEntity.ownerId.equals(userId) &
+            _db.remoteAssetEntity.deletedAt.isNull(),
+      ),
+    ])..where(_db.localAssetEntity.createdAt.isSmallerOrEqualValue(cutoffDate));
+
+    final rows = await query.get();
+    return rows.map((row) => row.readTable(_db.localAssetEntity).toDto()).toList();
+  }
 }
